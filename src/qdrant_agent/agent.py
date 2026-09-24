@@ -1,5 +1,4 @@
 import hashlib
-import os
 from pathlib import Path
 
 from agno.agent import Agent
@@ -16,8 +15,23 @@ from qdrant_agent.instructions import CODER_INSTRUCTIONS, CRITIC_INSTRUCTIONS, T
 SKILLS_DIR = Path(__file__).parent / "skills"
 SESSIONS_DB_PATH = Path.home() / ".qdrant_agent" / "sessions.json"
 
-OPENAI_MODEL = os.getenv("QDRANT_AGENT_OPENAI_MODEL", "gpt-5")
-CLAUDE_MODEL = os.getenv("QDRANT_AGENT_CLAUDE_MODEL", "claude-sonnet-5")
+PROVIDER_MODELS = {
+    "OpenAI": ["gpt-5", "gpt-5-mini", "gpt-4.1"],
+    "Anthropic": ["claude-sonnet-5", "claude-opus-5", "claude-haiku-4-5-20251001"],
+}
+
+PROVIDER_API_KEY_ENV = {
+    "OpenAI": "OPENAI_API_KEY",
+    "Anthropic": "ANTHROPIC_API_KEY",
+}
+
+TAVILY_API_KEY_ENV = "TAVILY_API_KEY"
+
+
+def _model(provider: str, model_id: str):
+    if provider == "OpenAI":
+        return OpenAIChat(id=model_id)
+    return Claude(id=model_id)
 
 
 def _session_id_for(base_dir: str) -> str:
@@ -25,7 +39,14 @@ def _session_id_for(base_dir: str) -> str:
     return "dir-" + hashlib.sha256(resolved.encode()).hexdigest()[:16]
 
 
-def build_team(base_dir: str) -> Team:
+def build_team(
+    base_dir: str,
+    coder_provider: str,
+    coder_model: str,
+    critic_provider: str,
+    critic_model: str,
+    qdrant_context: str,
+) -> Team:
     skills = Skills(loaders=[LocalSkills(path=str(SKILLS_DIR))])
 
     # coder writes the deliverable; critic can only read/run, never write/edit it
@@ -44,25 +65,28 @@ def build_team(base_dir: str) -> Team:
         TavilyTools(),
     ]
 
-    claude_agent = Agent(
-        name="qdrant-claude",
-        model=Claude(id=CLAUDE_MODEL),
+    coder_agent = Agent(
+        name="qdrant-coder",
+        model=_model(coder_provider, coder_model),
         tools=coder_tools,
         skills=skills,
         instructions=CODER_INSTRUCTIONS,
+        additional_context=qdrant_context,
     )
-    openai_agent = Agent(
-        name="qdrant-openai",
-        model=OpenAIChat(id=OPENAI_MODEL),
+    critic_agent = Agent(
+        name="qdrant-critic",
+        model=_model(critic_provider, critic_model),
         tools=critic_tools,
         skills=skills,
         instructions=CRITIC_INSTRUCTIONS,
+        additional_context=qdrant_context,
     )
 
     return Team(
-        members=[claude_agent, openai_agent],
-        model=Claude(id=CLAUDE_MODEL),
+        members=[coder_agent, critic_agent],
+        model=_model(coder_provider, coder_model),
         instructions=TEAM_INSTRUCTIONS,
+        additional_context=qdrant_context,
         db=JsonDb(db_path=str(SESSIONS_DB_PATH)),
         session_id=_session_id_for(base_dir),
         add_history_to_context=True,

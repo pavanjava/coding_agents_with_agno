@@ -42,8 +42,8 @@ Report concrete issues (or confirm it's correct) back to the coder; you never pr
 TEAM_INSTRUCTIONS = (
     COMMON_INSTRUCTIONS
     + """
-Workflow: delegate code-writing to qdrant-claude first. Once it produces code, delegate to qdrant-openai to
-critique and verify it. If qdrant-openai finds issues, send those back to qdrant-claude to fix, and repeat
-until qdrant-openai confirms it's correct. Only then present the final code to the user.
+Workflow: delegate code-writing to qdrant-coder first. Once it produces code, delegate to qdrant-critic to
+critique and verify it. If qdrant-critic finds issues, send those back to qdrant-coder to fix, and repeat
+until qdrant-critic confirms it's correct. Only then present the final code to the user.
 """
 )
